@@ -48,25 +48,13 @@ def get(opener, path):
 
 
 def fetch_notices(opener, limit=20):
-    info = get(opener, "me/info")
-    centers = {}
-    for child in info.get("children", []):
-        for enr in child.get("enrollment", []):
-            centers[enr["center_id"]] = enr.get("center_name")
-    notices = []
-    for cid, cname in centers.items():
-        path = f"centers/{cid}/notices/?page_size={min(limit, 50)}"
-        while path and len(notices) < limit:
-            page = get(opener, path)
-            for n in page["results"]:
-                n["center_name"] = cname
-                notices.append(n)
-            nxt = page.get("next")
-            path = (
-                f"centers/{cid}/notices/?page_size={min(limit, 50)}&cursor={urllib.parse.quote(nxt)}"
-                if nxt
-                else None
-            )
+    """원 공지 + 반 공지를 합친 notices/ 엔드포인트를 최신순으로 가져온다."""
+    size = min(limit, 50)
+    notices, page_no = [], 1
+    while len(notices) < limit and page_no:
+        page = get(opener, f"notices/?page_size={size}&page={page_no}")
+        notices.extend(page["results"])
+        page_no = page.get("next")  # 다음 페이지 번호, 없으면 None
     return notices[:limit]
 
 
@@ -80,7 +68,8 @@ def main():
         json.dump(notices, sys.stdout, ensure_ascii=False, indent=2)
         return
     for n in notices:
-        print(f"[{n['created'][:10]}] {n['title']} ({n['author_name']}, {n['center_name']})")
+        scope = n.get("class_name") or "전체"
+        print(f"[{n['created'][:10]}] {n['title']} ({scope}, {n['author_name']})")
         print(f"  {n['content'].strip()[:200]}")
         for f in n.get("attached_files", []):
             print(f"  첨부: {f.get('original_file_name')}")
